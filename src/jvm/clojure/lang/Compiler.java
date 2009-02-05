@@ -2888,6 +2888,11 @@ static public class FnExpr implements Expr{
 	final static Method getClassLoaderMethod = Method.getMethod("ClassLoader getClassLoader()");
 	final static Method getConstantsMethod = Method.getMethod("Object[] getConstants(int)");
 	final static Method readStringMethod = Method.getMethod("Object readString(String)");
+	final static Method readSymbolMethod = Method.getMethod("Object readSymbol(String)");
+	final static Method readKeywordMethod = Method.getMethod("Object readKeyword(String)");
+	final static Method readVarMethod = Method.getMethod("Object readVar(String)");
+	final static Method readIntegerMethod = Method.getMethod("Object readInteger(String)");
+	final static Method readClassMethod = Method.getMethod("Object readClass(String)");
 	private DynamicClassLoader loader;
 	private byte[] bytecode;
 
@@ -3178,6 +3183,37 @@ static public class FnExpr implements Expr{
                     {
                     clinitgen.push((String)constants.nth(i));
                     }
+                else if (constants.nth(i) instanceof Integer)
+                    {
+                        clinitgen.push(constants.nth(i).toString()); // find more efficient way
+                        clinitgen.invokeStatic(RT_TYPE, readIntegerMethod);
+                        clinitgen.checkCast(constantType(i));
+                    }
+                else if (constants.nth(i) instanceof Class)
+                    {
+                        clinitgen.push(((Class)constants.nth(i)).getName());
+                        clinitgen.invokeStatic(RT_TYPE, readClassMethod);
+                        clinitgen.checkCast(constantType(i));
+                    }
+                else if (constants.nth(i) instanceof Symbol)
+                    {
+                        clinitgen.push(constants.nth(i).toString());
+                        clinitgen.invokeStatic(RT_TYPE, readSymbolMethod);
+                        clinitgen.checkCast(constantType(i));
+                    }
+                else if (constants.nth(i) instanceof Keyword)
+                    {
+                        clinitgen.push(((Keyword)constants.nth(i)).sym.toString());
+                        clinitgen.invokeStatic(RT_TYPE, readKeywordMethod);
+                        clinitgen.checkCast(constantType(i));
+                    }
+                else if (constants.nth(i) instanceof Var)
+                    {
+                        Var var = (Var)constants.nth(i);
+                        clinitgen.push(var.ns.name + "/" + var.sym);
+                        clinitgen.invokeStatic(RT_TYPE, readVarMethod);
+                        clinitgen.checkCast(constantType(i));
+                    }
                 else
                     {
                     String cs = null;
@@ -3195,6 +3231,8 @@ static public class FnExpr implements Expr{
 
                     if (cs.startsWith("#<"))
                         throw new RuntimeException("Can't embed unreadable object in code: " + cs);
+
+                    //                    System.out.println("readString: " + constants.nth(i).getClass() + " / " + cs);
                     clinitgen.push(cs);
                     clinitgen.invokeStatic(RT_TYPE, readStringMethod);
                     clinitgen.checkCast(constantType(i));
