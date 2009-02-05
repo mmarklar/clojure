@@ -35,11 +35,11 @@
                            (if (neg? i)
                              ret
                              (recur (assoc ret 
-                                           (. clojure.lang.Keyword (intern (symbol (. atts (getQName i)))))
+                                           (. clojure.lang.Keyword (intern (symbol (. atts (getLocalName i)))))
                                            (. atts (getValue i)))
                                     (dec i))))
                    e (struct element 
-                             (. clojure.lang.Keyword (intern (symbol q-name)))
+                             (. clojure.lang.Keyword (intern (symbol local-name)))
                              (when (pos? (. atts (getLength)))
                                (attrs {} (dec (. atts (getLength))))))]
                (push-chars)
