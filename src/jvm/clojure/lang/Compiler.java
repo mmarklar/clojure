@@ -2885,11 +2885,6 @@ static public class FnExpr implements Expr{
 	final static Method getClassLoaderMethod = Method.getMethod("ClassLoader getClassLoader()");
 	final static Method getConstantsMethod = Method.getMethod("Object[] getConstants(int)");
 	final static Method readStringMethod = Method.getMethod("Object readString(String)");
-	final static Method readSymbolMethod = Method.getMethod("Object readSymbol(String)");
-	final static Method readKeywordMethod = Method.getMethod("Object readKeyword(String)");
-	final static Method readVarMethod = Method.getMethod("Object readVar(String)");
-	final static Method readIntegerMethod = Method.getMethod("Object readInteger(String)");
-	final static Method readClassMethod = Method.getMethod("Object readClass(String)");
 	private DynamicClassLoader loader;
 	private byte[] bytecode;
 
@@ -3172,21 +3167,29 @@ static public class FnExpr implements Expr{
         if (value instanceof String) {
             gen.push((String)value);
         } else if (value instanceof Integer) {
-            gen.push(value.toString()); // TODO call intValue directly
-            gen.invokeStatic(RT_TYPE, readIntegerMethod);
+            gen.push(value.toString());
+            gen.invokeStatic(Type.getType(Integer.class), Method.getMethod("Integer valueOf(String)"));
+        } else if (value instanceof Double) {
+            gen.push(value.toString());
+            gen.invokeStatic(Type.getType(Double.class), Method.getMethod("Double valueOf(String)"));
+        } else if (value instanceof Character) {
+            gen.push(((Character)value).charValue());
+            gen.invokeStatic(Type.getType(Character.class), Method.getMethod("Character valueOf(char)"));
         } else if (value instanceof Class) {
             gen.push(((Class)value).getName());
-            gen.invokeStatic(RT_TYPE, readClassMethod); // TODO call forName directly
+            gen.invokeStatic(Type.getType(Class.class), Method.getMethod("Class forName(String)"));
         } else if (value instanceof Symbol) {
             gen.push(value.toString());
-            gen.invokeStatic(RT_TYPE, readSymbolMethod);
+            gen.invokeStatic(Type.getType(Symbol.class), Method.getMethod("clojure.lang.Symbol intern(String)"));
         } else if (value instanceof Keyword) {
             gen.push(((Keyword)value).sym.toString());
-            gen.invokeStatic(RT_TYPE, readKeywordMethod);
+            gen.invokeStatic(Type.getType(Symbol.class), Method.getMethod("clojure.lang.Symbol intern(String)"));
+            gen.invokeStatic(Type.getType(Keyword.class), Method.getMethod("clojure.lang.Keyword intern(clojure.lang.Symbol)"));
         } else if (value instanceof Var) {
             Var var = (Var) value;
-            gen.push(var.ns.name + "/" + var.sym);
-            gen.invokeStatic(RT_TYPE, readVarMethod);
+            gen.push(var.ns.name.toString());
+            gen.push(var.sym.toString());
+            gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.Var var(String,String)"));
         } else if (value instanceof List) {
             gen.push(((List)value).size());
             gen.newArray(OBJECT_TYPE);
@@ -3207,7 +3210,7 @@ static public class FnExpr implements Expr{
             String cs = null;
             try {
                 cs = RT.printString(value);
-                //                System.out.println("WARNING SLOW CODE: " + value.getClass() + " / " + value + " -> " + cs);
+//                System.out.println("WARNING SLOW CODE: " + value.getClass() + " / " + value + " -> " + cs);
             } catch (Exception e) {
                 throw new RuntimeException("Can't embed object in code, maybe print-dup not defined: " + value);
             }

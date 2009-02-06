@@ -1191,22 +1191,6 @@ static public Object readString(String s){
 		}
 }
 
-    static public Object readInteger(String s) {
-        return Integer.valueOf(s);
-    }
-
-    static public Object readClass(String s) throws ClassNotFoundException {
-        return Class.forName(s);
-    }
-
-    static public Object readSymbol(String s) {
-        return Symbol.intern(s);
-    }
-
-    static public Object readKeyword(String s) {
-        return Keyword.intern(Symbol.intern(s));
-    }
-
     static public Object readVar(String s) {
         int i = s.indexOf('/');
         return var(s.substring(0, i), s.substring(i + 1));
