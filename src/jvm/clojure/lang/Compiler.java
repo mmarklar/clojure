@@ -28,10 +28,7 @@ import org.objectweb.asm.util.CheckClassAdapter;
 //*/
 
 import java.io.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Arrays;
+import java.util.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 
@@ -3171,82 +3168,72 @@ static public class FnExpr implements Expr{
 //			getCompiledClass();
 	}
 
+    void emitValue(Object value, GeneratorAdapter gen) {
+        if (value instanceof String) {
+            gen.push((String)value);
+        } else if (value instanceof Integer) {
+            gen.push(value.toString()); // TODO call intValue directly
+            gen.invokeStatic(RT_TYPE, readIntegerMethod);
+        } else if (value instanceof Class) {
+            gen.push(((Class)value).getName());
+            gen.invokeStatic(RT_TYPE, readClassMethod); // TODO call forName directly
+        } else if (value instanceof Symbol) {
+            gen.push(value.toString());
+            gen.invokeStatic(RT_TYPE, readSymbolMethod);
+        } else if (value instanceof Keyword) {
+            gen.push(((Keyword)value).sym.toString());
+            gen.invokeStatic(RT_TYPE, readKeywordMethod);
+        } else if (value instanceof Var) {
+            Var var = (Var) value;
+            gen.push(var.ns.name + "/" + var.sym);
+            gen.invokeStatic(RT_TYPE, readVarMethod);
+        } else if (value instanceof List) {
+            gen.push(((List)value).size());
+            gen.newArray(OBJECT_TYPE);
+            int i = 0;
+            for (Iterator it = ((List)value).iterator(); it.hasNext(); i++) {
+                gen.dup();
+                gen.push(i);
+                emitValue(it.next(), gen);
+                gen.arrayStore(OBJECT_TYPE);
+            }
+        
+            if (value instanceof IPersistentVector) {
+                gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.IPersistentVector vector(Object[])"));
+            } else {
+                gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.ISeq arrayToList(Object[])"));
+            }
+        } else {
+            String cs = null;
+            try {
+                cs = RT.printString(value);
+                //                System.out.println("WARNING SLOW CODE: " + value.getClass() + " / " + value + " -> " + cs);
+            } catch (Exception e) {
+                throw new RuntimeException("Can't embed object in code, maybe print-dup not defined: " + value);
+            }
+            if (cs.length() == 0)
+                throw new RuntimeException("Can't embed unreadable object in code: " + value);
+
+            if (cs.startsWith("#<"))
+                throw new RuntimeException("Can't embed unreadable object in code: " + cs);
+
+            gen.push(cs);
+            gen.invokeStatic(RT_TYPE, readStringMethod);
+        }
+    }
 
     void emitConstants(GeneratorAdapter clinitgen) {
-        try
-            {
+        try {
             Var.pushThreadBindings(RT.map(RT.PRINT_DUP, RT.T));
 
-            for (int i = 0; i < constants.count(); i++)
-                {
-                if (constants.nth(i) instanceof String)
-                    {
-                    clinitgen.push((String)constants.nth(i));
-                    }
-                else if (constants.nth(i) instanceof Integer)
-                    {
-                        clinitgen.push(constants.nth(i).toString()); // find more efficient way
-                        clinitgen.invokeStatic(RT_TYPE, readIntegerMethod);
-                        clinitgen.checkCast(constantType(i));
-                    }
-                else if (constants.nth(i) instanceof Class)
-                    {
-                        clinitgen.push(((Class)constants.nth(i)).getName());
-                        clinitgen.invokeStatic(RT_TYPE, readClassMethod);
-                        clinitgen.checkCast(constantType(i));
-                    }
-                else if (constants.nth(i) instanceof Symbol)
-                    {
-                        clinitgen.push(constants.nth(i).toString());
-                        clinitgen.invokeStatic(RT_TYPE, readSymbolMethod);
-                        clinitgen.checkCast(constantType(i));
-                    }
-                else if (constants.nth(i) instanceof Keyword)
-                    {
-                        clinitgen.push(((Keyword)constants.nth(i)).sym.toString());
-                        clinitgen.invokeStatic(RT_TYPE, readKeywordMethod);
-                        clinitgen.checkCast(constantType(i));
-                    }
-                else if (constants.nth(i) instanceof Var)
-                    {
-                        Var var = (Var)constants.nth(i);
-                        clinitgen.push(var.ns.name + "/" + var.sym);
-                        clinitgen.invokeStatic(RT_TYPE, readVarMethod);
-                        clinitgen.checkCast(constantType(i));
-                    }
-                else
-                    {
-                    String cs = null;
-                    try
-                        {
-                        cs = RT.printString(constants.nth(i));
-                        }
-                    catch (Exception e)
-                        {
-                        throw new RuntimeException("Can't embed object in code, maybe print-dup not defined: "
-                                + constants.nth(i));
-                        }
-                    if (cs.length() == 0)
-                        throw new RuntimeException("Can't embed unreadable object in code: " + constants.nth(i));
-
-                    if (cs.startsWith("#<"))
-                        throw new RuntimeException("Can't embed unreadable object in code: " + cs);
-
-                    //                    System.out.println("readString: " + constants.nth(i).getClass() + " / " + cs);
-                    clinitgen.push(cs);
-                    clinitgen.invokeStatic(RT_TYPE, readStringMethod);
-                    clinitgen.checkCast(constantType(i));
-                    }
-//				clinitgen.dup();
-//				clinitgen.push(i);
-//				clinitgen.arrayLoad(OBJECT_TYPE);
+            for (int i = 0; i < constants.count(); i++) {
+                emitValue(constants.nth(i), clinitgen);
+                clinitgen.checkCast(constantType(i));
                 clinitgen.putStatic(fntype, constantName(i), constantType(i));
-                }
             }
-        finally
-            {
+        } finally {
             Var.popThreadBindings();
-            }
+        }
     }
 
 	synchronized Class getCompiledClass(){
