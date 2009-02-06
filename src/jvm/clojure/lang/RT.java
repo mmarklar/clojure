@@ -411,9 +411,11 @@ static public void load(String scriptbase, boolean failIfNotFound) throws Except
 
 static void doInit() throws Exception{
 	load("clojure/core");
+        /*
 	load("clojure/zip",false);
 	load("clojure/xml",false);
 	load("clojure/set",false);
+        */
 
 	Var.pushThreadBindings(
 			RT.map(CURRENT_NS, CURRENT_NS.get(),
@@ -1190,11 +1192,6 @@ static public Object readString(String s){
 		throw new RuntimeException(e);
 		}
 }
-
-    static public Object readVar(String s) {
-        int i = s.indexOf('/');
-        return var(s.substring(0, i), s.substring(i + 1));
-    }
 
 static public void print(Object x, Writer w) throws Exception{
 	//call multimethod
