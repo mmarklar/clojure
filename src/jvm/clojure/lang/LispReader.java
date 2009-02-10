@@ -26,7 +26,7 @@ static final Symbol QUOTE = Symbol.create("quote");
 static final Symbol THE_VAR = Symbol.create("var");
 //static Symbol SYNTAX_QUOTE = Symbol.create(null, "syntax-quote");
 static Symbol UNQUOTE = Symbol.create("clojure.core", "unquote");
-//static Symbol UNQUOTE_SPLICING = Symbol.create(null, "unquote-splicing");
+static Symbol UNQUOTE_SPLICING = Symbol.create("clojure.core", "unquote-splicing");
 static Symbol CONCAT = Symbol.create("clojure.core", "concat");
 static Symbol LIST = Symbol.create("clojure.core", "list");
 static Symbol APPLY = Symbol.create("clojure.core", "apply");
@@ -90,6 +90,7 @@ static
 	dispatchMacros['='] = new EvalReader();
 	dispatchMacros['!'] = new CommentReader();
 	dispatchMacros['<'] = new UnreadableReader();
+	dispatchMacros['_'] = new DiscardReader();
 	}
 
 static boolean isWhitespace(int ch){
@@ -466,6 +467,14 @@ public static class CommentReader extends AFn{
 
 }
 
+public static class DiscardReader extends AFn{
+	public Object invoke(Object reader, Object underscore) throws Exception{
+		PushbackReader r = (PushbackReader) reader;
+		read(r, true, null, true);
+		return r;
+	}
+}
+
 public static class WrappingReader extends AFn{
 	final Symbol sym;
 
@@ -538,7 +547,7 @@ static Symbol garg(int n){
 public static class FnReader extends AFn{
 	public Object invoke(Object reader, Object lparen) throws Exception{
 		PushbackReader r = (PushbackReader) reader;
-		if(ARG_ENV.get() != null)
+		if(ARG_ENV.deref() != null)
 			throw new IllegalStateException("Nested #()s are not allowed");
 		try
 			{
@@ -548,7 +557,7 @@ public static class FnReader extends AFn{
 			Object form = read(r, true, null, true);
 
 			PersistentVector args = PersistentVector.EMPTY;
-			PersistentTreeMap argsyms = (PersistentTreeMap) ARG_ENV.get();
+			PersistentTreeMap argsyms = (PersistentTreeMap) ARG_ENV.deref();
 			ISeq rargs = argsyms.rseq();
 			if(rargs != null)
 				{
@@ -580,7 +589,7 @@ public static class FnReader extends AFn{
 }
 
 static Symbol registerArg(int n){
-	PersistentTreeMap argsyms = (PersistentTreeMap) ARG_ENV.get();
+	PersistentTreeMap argsyms = (PersistentTreeMap) ARG_ENV.deref();
 	if(argsyms == null)
 		{
 		throw new IllegalStateException("arg literal not in #()");
@@ -669,7 +678,7 @@ public static class SyntaxQuoteReader extends AFn{
 			Symbol sym = (Symbol) form;
 			if(sym.ns == null && sym.name.endsWith("#"))
 				{
-				IPersistentMap gmap = (IPersistentMap) GENSYM_ENV.get();
+				IPersistentMap gmap = (IPersistentMap) GENSYM_ENV.deref();
 				if(gmap == null)
 					throw new IllegalStateException("Gensym literal not in syntax-quote");
 				Symbol gs = (Symbol) gmap.valAt(sym);
@@ -695,7 +704,7 @@ public static class SyntaxQuoteReader extends AFn{
 			}
 		else if(isUnquote(form))
 			return RT.second(form);
-		else if(form instanceof UnquoteSplicing)
+		else if(isUnquoteSplicing(form))
 			throw new IllegalStateException("splice not in list");
 		else if(form instanceof IPersistentCollection)
 			{
@@ -712,10 +721,13 @@ public static class SyntaxQuoteReader extends AFn{
 				{
 				ret = RT.list(APPLY, HASHSET, RT.cons(CONCAT, sqExpandList(((IPersistentSet) form).seq())));
 				}
-			else if(form instanceof ISeq)
+			else if(form instanceof ISeq || form instanceof IPersistentList)
 				{
 				ISeq seq = RT.seq(form);
-				ret = RT.cons(CONCAT, sqExpandList(seq));
+				if(seq == null)
+					ret = PersistentList.EMPTY;
+				else
+					ret = RT.cons(CONCAT, sqExpandList(seq));
 				}
 			else
 				throw new UnsupportedOperationException("Unknown Collection type");
@@ -745,8 +757,8 @@ public static class SyntaxQuoteReader extends AFn{
 			Object item = seq.first();
 			if(isUnquote(item))
 				ret = ret.cons(RT.list(LIST, RT.second(item)));
-			else if(item instanceof UnquoteSplicing)
-				ret = ret.cons(((UnquoteSplicing) item).o);
+			else if(isUnquoteSplicing(item))
+				ret = ret.cons(RT.second(item));
 			else
 				ret = ret.cons(RT.list(LIST, syntaxQuote(item)));
 			}
@@ -766,13 +778,8 @@ public static class SyntaxQuoteReader extends AFn{
 
 }
 
-
-static class UnquoteSplicing{
-	final Object o;
-
-	public UnquoteSplicing(Object o){
-		this.o = o;
-	}
+static boolean isUnquoteSplicing(Object form){
+	return form instanceof ISeq && RT.first(form).equals(UNQUOTE_SPLICING);
 }
 
 static boolean isUnquote(Object form){
@@ -788,7 +795,7 @@ static class UnquoteReader extends AFn{
 		if(ch == '@')
 			{
 			Object o = read(r, true, null, true);
-			return new UnquoteSplicing(o);
+			return RT.list(UNQUOTE_SPLICING, o);
 			}
 		else
 			{
