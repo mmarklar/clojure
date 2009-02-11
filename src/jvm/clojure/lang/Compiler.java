@@ -3163,6 +3163,18 @@ static public class FnExpr implements Expr{
 //			getCompiledClass();
 	}
 
+    void emitListAsObjectArray(Object value, GeneratorAdapter gen) {
+        gen.push(((List)value).size());
+        gen.newArray(OBJECT_TYPE);
+        int i = 0;
+        for (Iterator it = ((List)value).iterator(); it.hasNext(); i++) {
+            gen.dup();
+            gen.push(i);
+            emitValue(it.next(), gen);
+            gen.arrayStore(OBJECT_TYPE);
+        }
+    }
+
     void emitValue(Object value, GeneratorAdapter gen) {
         if (value instanceof String) {
             gen.push((String)value);
@@ -3190,27 +3202,25 @@ static public class FnExpr implements Expr{
             gen.push(var.ns.name.toString());
             gen.push(var.sym.toString());
             gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.Var var(String,String)"));
-        } else if (value instanceof List) {
-            gen.push(((List)value).size());
-            gen.newArray(OBJECT_TYPE);
-            int i = 0;
-            for (Iterator it = ((List)value).iterator(); it.hasNext(); i++) {
-                gen.dup();
-                gen.push(i);
-                emitValue(it.next(), gen);
-                gen.arrayStore(OBJECT_TYPE);
+        } else if (value instanceof IPersistentMap) {
+            List entries = new ArrayList();
+            for (Map.Entry entry : (Set<Map.Entry>) ((Map)value).entrySet()) {
+                entries.add(entry.getKey());
+                entries.add(entry.getValue());
             }
-        
-            if (value instanceof IPersistentVector) {
-                gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.IPersistentVector vector(Object[])"));
-            } else {
-                gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.ISeq arrayToList(Object[])"));
-            }
+            emitListAsObjectArray(entries, gen);
+            gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.IPersistentMap map(Object[])"));
+        } else if (value instanceof IPersistentVector) {
+            emitListAsObjectArray(value, gen);
+            gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.IPersistentVector vector(Object[])"));
+        } else if (value instanceof ISeq || value instanceof IPersistentList) {
+            emitListAsObjectArray(value, gen);
+            gen.invokeStatic(RT_TYPE, Method.getMethod("clojure.lang.ISeq arrayToList(Object[])"));
         } else {
             String cs = null;
             try {
                 cs = RT.printString(value);
-//                System.out.println("WARNING SLOW CODE: " + value.getClass() + " / " + value + " -> " + cs);
+System.out.println("WARNING SLOW CODE: " + value.getClass() + " -> " + cs);
             } catch (Exception e) {
                 throw new RuntimeException("Can't embed object in code, maybe print-dup not defined: " + value);
             }
