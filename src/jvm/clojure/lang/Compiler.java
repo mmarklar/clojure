@@ -121,6 +121,7 @@ final static Type CLASS_TYPE = Type.getType(Class.class);
 final static Type REFLECTOR_TYPE = Type.getType(Reflector.class);
 final static Type THROWABLE_TYPE = Type.getType(Throwable.class);
 final static Type BOOLEAN_OBJECT_TYPE = Type.getType(Boolean.class);
+final static Type IOBJ_TYPE = Type.getType(IObj.class);
 final static Type IPERSISTENTMAP_TYPE = Type.getType(IPersistentMap.class);
 
 private static final Type[][] ARG_TYPES;
@@ -3176,6 +3177,7 @@ static public class FnExpr implements Expr{
     }
 
     void emitValue(Object value, GeneratorAdapter gen) {
+        boolean partial = true;
         if (value instanceof String) {
             gen.push((String)value);
         } else if (value instanceof Integer) {
@@ -3220,7 +3222,7 @@ static public class FnExpr implements Expr{
             String cs = null;
             try {
                 cs = RT.printString(value);
-System.out.println("WARNING SLOW CODE: " + value.getClass() + " -> " + cs);
+                // System.out.println("WARNING SLOW CODE: " + value.getClass() + " -> " + cs);
             } catch (Exception e) {
                 throw new RuntimeException("Can't embed object in code, maybe print-dup not defined: " + value);
             }
@@ -3232,6 +3234,16 @@ System.out.println("WARNING SLOW CODE: " + value.getClass() + " -> " + cs);
 
             gen.push(cs);
             gen.invokeStatic(RT_TYPE, readStringMethod);
+            partial = false;
+        }
+
+        if (partial) {
+            if (value instanceof Obj && RT.count(((Obj)value).meta()) > 0) {
+                gen.checkCast(IOBJ_TYPE);
+                emitValue(((Obj)value).meta(), gen);
+                gen.checkCast(IPERSISTENTMAP_TYPE);
+                gen.invokeInterface(IOBJ_TYPE, Method.getMethod("clojure.lang.IObj withMeta(clojure.lang.IPersistentMap)"));
+            }
         }
     }
 
