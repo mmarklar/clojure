@@ -8,20 +8,10 @@
  *   You must not remove this notice, or any other, from this software.
  **/
 
-/* rich Nov 18, 2007 */
+/* rich Jan 28, 2009 */
 
 package clojure.lang;
 
-public interface IRef extends IDeref{
-
-	void setValidator(IFn vf);
-
-    IFn getValidator();
-
-    IPersistentMap getWatches();
-
-    IRef addWatch(Object key, IFn callback);
-
-    IRef removeWatch(Object key);
-
+public interface Seqable {
+    ISeq seq();
 }

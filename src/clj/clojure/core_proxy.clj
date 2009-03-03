@@ -155,7 +155,7 @@
                              meths (concat 
                                     (seq (. c (getDeclaredMethods)))
                                     (seq (. c (getMethods))))]
-                        (if meths 
+                        (if (seq meths)
                           (let [#^java.lang.reflect.Method meth (first meths)
                                 mods (. meth (getModifiers))
                                 mk (method-sig meth)]
@@ -165,8 +165,8 @@
                                     (. Modifier (isStatic mods))
                                     (. Modifier (isFinal mods))
                                     (= "finalize" (.getName meth)))
-                              (recur mm (conj considered mk) (rest meths))
-                              (recur (assoc mm mk meth) (conj considered mk) (rest meths))))
+                              (recur mm (conj considered mk) (next meths))
+                              (recur (assoc mm mk meth) (conj considered mk) (next meths))))
                           [mm considered]))]
                   (recur mm considered (. c (getSuperclass))))
                 [mm considered]))]
@@ -199,7 +199,7 @@
 (defn- get-super-and-interfaces [bases]
   (if (. #^Class (first bases) (isInterface))
     [Object bases]
-    [(first bases) (rest bases)]))
+    [(first bases) (next bases)]))
 
 (defn get-proxy-class 
   "Takes an optional single class followed by zero or more
@@ -291,7 +291,7 @@
                                    (cons (apply vector 'this params) body))
                                meths)]
                 (if-not (contains? fmap (name sym))		  
-                  (recur (assoc fmap (name sym) (cons `fn meths)) (rest fs))
+                (recur (assoc fmap (name sym) (cons `fn meths)) (next fs))
 		           (throw (IllegalArgumentException.
 			              (str "Method '" (name sym) "' redefined")))))
               fmap)))
@@ -309,3 +309,41 @@
   Note, expansion captures 'this"
   [meth & args]
  `(proxy-call-with-super (fn [] (. ~'this ~meth ~@args))  ~'this ~(name meth)))
+
+(comment ; java.beans not available on android
+(defn bean
+  "Takes a Java object and returns a read-only implementation of the
+  map abstraction based upon its JavaBean properties."
+  [#^Object x]
+  (let [c (. x (getClass))
+	pmap (reduce (fn [m #^java.beans.PropertyDescriptor pd]
+			 (let [name (. pd (getName))
+			       method (. pd (getReadMethod))]
+			   (if (and method (zero? (alength (. method (getParameterTypes)))))
+			     (assoc m (keyword name) (fn [] (clojure.lang.Reflector/prepRet (. method (invoke x nil)))))
+			     m)))
+		     {}
+		     (seq (.. java.beans.Introspector
+			      (getBeanInfo c)
+			      (getPropertyDescriptors))))
+	v (fn [k] ((pmap k)))
+        snapshot (fn []
+                   (reduce (fn [m e]
+                             (assoc m (key e) ((val e))))
+                           {} (seq pmap)))]
+    (proxy [clojure.lang.APersistentMap]
+           []
+      (containsKey [k] (contains? pmap k))
+      (entryAt [k] (when (contains? pmap k) (new clojure.lang.MapEntry k (v k))))
+      (valAt ([k] (v k))
+	     ([k default] (if (contains? pmap k) (v k) default)))
+      (cons [m] (conj (snapshot) m))
+      (count [] (count pmap))
+      (assoc [k v] (assoc (snapshot) k v))
+      (without [k] (dissoc (snapshot) k))
+      (seq [] ((fn thisfn [plseq]
+		  (lazy-seq
+                   (when-let [pseq (seq plseq)]
+                     (cons (new clojure.lang.MapEntry (first pseq) (v (first pseq)))
+                           (thisfn (rest pseq)))))) (keys pmap))))))
+)

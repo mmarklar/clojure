@@ -24,9 +24,9 @@
       (let [[mm considered]
             (loop [mm mm
                    considered considered
-                   meths (concat
-                          (seq (. c (getDeclaredMethods)))
-                          (seq (. c (getMethods))))]
+                   meths (seq (concat
+                                (seq (. c (getDeclaredMethods)))
+                                (seq (. c (getMethods)))))]
               (if meths
                 (let [#^java.lang.reflect.Method meth (first meths)
                       mods (. meth (getModifiers))
@@ -37,8 +37,8 @@
                           (. Modifier (isStatic mods))
                           (. Modifier (isFinal mods))
                           (= "finalize" (.getName meth)))
-                    (recur mm (conj considered mk) (rest meths))
-                    (recur (assoc mm mk meth) (conj considered mk) (rest meths))))
+                    (recur mm (conj considered mk) (next meths))
+                    (recur (assoc mm mk meth) (conj considered mk) (next meths))))
                 [mm considered]))]
         (recur mm considered (. c (getSuperclass))))
       mm)))
@@ -130,7 +130,7 @@
         all-sigs (distinct (concat (map #(let[[m p] (key %)] {m [p]}) (mapcat non-private-methods supers))
                                    (map (fn [[m p]] {(str m) [p]}) methods)))
         sigs-by-name (apply merge-with concat {} all-sigs)
-        overloads (into {} (filter (fn [[m s]] (rest s)) sigs-by-name))
+        overloads (into {} (filter (fn [[m s]] (next s)) sigs-by-name))
         var-fields (concat (when init [init-name]) 
                            (when main [main-name])
                            ;(when exposes-methods (map str (vals exposes-methods)))
@@ -161,7 +161,7 @@
                 ptypes (to-types pclasses)
                 rtype #^Type (totype rclass)
                 m (new Method mname rtype ptypes)
-                is-overload (overloads mname)
+                is-overload (seq (overloads mname))
                 gen (new GeneratorAdapter (+ (. Opcodes ACC_PUBLIC) (if as-static (. Opcodes ACC_STATIC) 0)) 
                          m nil nil cv)
                 found-label (. gen (newLabel))
@@ -215,8 +215,8 @@
                                         ;start class definition
     (. cv (visit (. Opcodes V1_5) (+ (. Opcodes ACC_PUBLIC) (. Opcodes ACC_SUPER))
                  cname nil (iname super)
-                 (when interfaces
-                   (into-array (map iname interfaces)))))
+                 (when-let [ifc (seq interfaces)]
+                   (into-array (map iname ifc)))))
     
                                         ;static fields for vars
     (doseq [v var-fields]
