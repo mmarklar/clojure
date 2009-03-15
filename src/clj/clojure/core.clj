@@ -2749,7 +2749,7 @@
                       `(fn ~giter [~gxs]
                          (lazy-seq
                            (loop [~gxs ~gxs]
-                             (when-let [[~bind] (seq ~gxs)]
+                             (when-first [~bind ~gxs]
                                ~(do-mod mod-pairs)))))))]
     `(let [iter# ~(emit-bind (to-groups seq-exprs))]
         (iter# ~(second seq-exprs)))))
@@ -3253,7 +3253,7 @@
                  (lazy-seq
                   (let [x (.take q)]
                     (if (identical? x q) ;q itself is eos sentinel
-                      @agt  ;will be nil - touch agent just to propagate errors
+                      (do @agt nil)  ;touch agent just to propagate errors
                       (do
                         (send-off agt fill)
                         (cons (if (identical? x NIL) nil x) (drain)))))))]
